@@ -91,7 +91,11 @@ namespace Archivist.Core.Operations.Remote
             {
                 di.Create();
             }
-            await blob.DownloadToFileAsync(Path.Combine(entity.Item2, entity.Item3), FileMode.Create);
+            await blob.DownloadToFileAsync(Path.Combine(entity.Item2, entity.Item3), FileMode.Create, null, new BlobRequestOptions
+            {
+                UseTransactionalMD5 = true,
+                DisableContentMD5Validation = false
+            }, null);
         }
     }
 }

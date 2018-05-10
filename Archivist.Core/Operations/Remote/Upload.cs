@@ -91,7 +91,9 @@ namespace Archivist.Core.Operations.Remote
             {
                 StoreBlobContentMD5 = true,
                 RetryPolicy = new NoRetry(),
-                ParallelOperationThreadCount = parallelOperations
+                ParallelOperationThreadCount = parallelOperations,
+                UseTransactionalMD5 = true,
+                DisableContentMD5Validation = false,
             }, null);
         }
 

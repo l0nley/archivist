@@ -1,8 +1,9 @@
 ﻿using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.WindowsAzure.Storage.RetryPolicies;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,6 +24,7 @@ namespace Archivist.Core.Operations.Remote
         {
             var account = CloudStorageAccount.Parse(ConnectionString);
             var client = account.CreateCloudBlobClient();
+            client.DefaultRequestOptions.RetryPolicy = new NoRetry();
             return client.GetContainerReference(ContainerName);
         }
 
@@ -54,7 +56,7 @@ namespace Archivist.Core.Operations.Remote
                 }
 
 
-                if (DateTime.Now.Subtract(lastDate).TotalSeconds > 5)
+                if (DateTime.Now.Subtract(lastDate).TotalSeconds > 7)
                 {
                     lastDate = DateTime.Now;
                     env.WriteOut($"{operations.Count} in queue, {currentTasks.Count} executing, {currentRetries.Count} marked to retry");
@@ -145,11 +147,25 @@ namespace Archivist.Core.Operations.Remote
             }
             catch (Exception e)
             {
-                env.WriteOut($"{DateTime.Now.ToLongTimeString()} Failed {Id.ToString("N").Substring(0, 6)} subtask: {e.Message}. Will be queued for retry.");
+                var sb = new StringBuilder();
+                sb.AppendLine($"{DateTime.Now.ToLongTimeString()} Failed {Id.ToString("N").Substring(0, 6)} subtask. Will be queued for retry. Error messages:");
+                WalkExceptions(ref sb, e);
+                env.WriteOut(sb.ToString());
                 return input;
             }
             return default(T);
         }
+
+        private void WalkExceptions(ref StringBuilder sb, Exception e)
+        {
+            if(e == null)
+            {
+                return;
+            }
+            sb.AppendLine(e.Message);
+            WalkExceptions(ref sb, e.InnerException);
+        }
+             
 
         private RetryAsnwer AskRetry(int retriesCount, Util.Environment env)
         {
