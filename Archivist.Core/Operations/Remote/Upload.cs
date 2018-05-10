@@ -81,10 +81,17 @@ namespace Archivist.Core.Operations.Remote
         {
             var container = GetContainer();
             var blob = container.GetBlockBlobReference(pair.Key);
+            var fi = new FileInfo(pair.Value);
+            int parallelOperations = 1;
+            if((fi.Length / 1024.0 / 1024.0) > 256)
+            {
+                parallelOperations = 4;
+            }
             await blob.UploadFromFileAsync(pair.Value, null, new BlobRequestOptions
             {
                 StoreBlobContentMD5 = true,
-                RetryPolicy = new NoRetry()
+                RetryPolicy = new NoRetry(),
+                ParallelOperationThreadCount = parallelOperations
             }, null);
         }
 

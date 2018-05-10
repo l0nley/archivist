@@ -36,6 +36,7 @@ namespace Archivist.Core.Operations.Remote
             env.ReportStatus(Id, OperationStatus.InProgress);
             env.ReportProgress(Id, counter, total);
             bool autoRetry = false;
+            var lastDate = DateTime.Now;
             while (counter < total)
             {
                 if (currentRetries.Count == 0)
@@ -43,7 +44,7 @@ namespace Archivist.Core.Operations.Remote
                     if (operations.Count > 0 && currentTasks.Count < maxConcurency)
                     {
                         var operationToGo = operations.Dequeue();
-                        var task = Task.Run(() => RunTask(operationToGo, factory));
+                        var task = Task.Run(() => RunTask(operationToGo, factory, env));
                         currentTasks.Add(task);
                     }
                     else
@@ -52,7 +53,14 @@ namespace Archivist.Core.Operations.Remote
                     }
                 }
 
-                if (currentRetries.Count >= maxConcurency)
+
+                if (DateTime.Now.Subtract(lastDate).TotalSeconds > 5)
+                {
+                    lastDate = DateTime.Now;
+                    env.WriteOut($"{operations.Count} in queue, {currentTasks.Count} executing, {currentRetries.Count} marked to retry");
+                }
+
+                if (currentRetries.Count > 0 && currentTasks.Count == 0)
                 {
                     bool? currentRetry = null;
                     if (false == autoRetry)
@@ -81,7 +89,6 @@ namespace Archivist.Core.Operations.Remote
                         currentRetry = true;
                         env.WriteOut($"{currentRetries.Count} operations will be auto-retried");
                     }
-
 
                     if (currentRetry == true)
                     {
@@ -123,20 +130,22 @@ namespace Archivist.Core.Operations.Remote
                             return false;
                         }
                     });
+
                 }
             }
 
             env.ReportStatus(Id, OperationStatus.Success);
         }
 
-        private async Task<T> RunTask<T>(T input, Func<T, Task> factory)
+        private async Task<T> RunTask<T>(T input, Func<T, Task> factory, Util.Environment env)
         {
             try
             {
                 await factory(input);
             }
-            catch
+            catch (Exception e)
             {
+                env.WriteOut($"{DateTime.Now.ToLongTimeString()} Failed {Id.ToString("N").Substring(0, 6)} subtask: {e.Message}. Will be queued for retry.");
                 return input;
             }
             return default(T);
@@ -144,7 +153,7 @@ namespace Archivist.Core.Operations.Remote
 
         private RetryAsnwer AskRetry(int retriesCount, Util.Environment env)
         {
-            env.WriteOut($"{retriesCount} operations failed. Do you want to retry?[Y]es/[N]o/[C]ancel/[A]uto retry always");
+            env.WriteOut($"{DateTime.Now.ToLongTimeString()} {retriesCount} operations failed. Do you want to retry?[Y]es/[N]o/[C]ancel/[A]uto retry always");
             var key = env.GetKey();
             switch (key.Key)
             {
